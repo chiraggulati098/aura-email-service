@@ -99,3 +99,45 @@ def get_email_message_details(service, msg_id):
         'star': star,
         'label': label
     }
+
+def send_email(service, to, subject, body, body_type = 'plain', attachment_paths = None):
+    """
+    Send an email using the Gmail API.
+    Note: add attachment paths as a list of strings.
+    """
+    message = MIMEMultipart()
+    message['to'] = to
+    message['subject'] = subject
+
+    if body_type.lower() not in ['plain', 'html']:
+        raise ValueError("body_type must be 'plain' or 'html'")
+    
+    message.attach(MIMEText(body, body_type.lower()))
+
+    if attachment_paths:
+        for attachment_path in attachment_paths:
+            if os.path.exists(attachment_path):
+                filename = os.path.basename(attachment_path)
+
+                with open(attachment_path, 'rb') as attachment:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attachment.read())
+                
+                encoders.encode_base64(part)
+
+                part.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename={filename}',
+                )
+                message.attach(part)
+            else:
+                raise FileNotFoundError(f"Attachment file '{attachment_path}' not found.")
+    
+    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+
+    sent_message = service.users().messages().send(
+        userId = 'me',
+        body = {'raw': raw_message}
+    ).execute()
+
+    return sent_message
