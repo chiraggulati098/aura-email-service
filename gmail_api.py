@@ -31,10 +31,10 @@ def _extract_body(payload):
         body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8')
     return body
 
-def get_email_messages(service, user_id='me', label_ids=None, folder_name='INBOX', max_results=5):
+def get_email_messages(service, user_id='me', label_ids=None, folder_name='INBOX', max_results=None):
     """
     Get a list of email messages from the user's mailbox.
-    """
+        """
     messages = []
     next_page_token = None
 
