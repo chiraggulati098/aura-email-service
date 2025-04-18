@@ -180,3 +180,6 @@ def download_attachments_all(service, user_id, msg_id, target_dir):
                 print('Saving attachment to: ', file_path)
                 with open(file_path, 'wb') as f:
                     f.write(file_data)
+
+def trash_email(service, user_id, msg_id):
+    service.users().messages().trash(userId=user_id, id=msg_id).execute()
