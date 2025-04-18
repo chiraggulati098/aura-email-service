@@ -1,0 +1,7 @@
+venv
+.env
+.ipynb_checkpoints
+token files
+client_secret.json
+credentials.json
+__pycache__
