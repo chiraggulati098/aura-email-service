@@ -141,3 +141,42 @@ def send_email(service, to, subject, body, body_type = 'plain', attachment_paths
     ).execute()
 
     return sent_message
+
+def download_attachments_parent(service, user_id, msg_id, target_dir):
+    """
+    Download attachments from a specific email message.
+    """
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+
+    message = service.users().messages().get(userId=user_id, id=msg_id).execute()
+    for part in message['payload']['parts']:
+        if part['filename']:
+            att_id = part['body']['attachmentId']
+            att = service.users().messages().attachments().get(userId=user_id, messageId=msg_id, id=att_id).execute()
+            data = att['data']
+            file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+            file_path = os.path.join(target_dir, part['filename'])
+            print('Saving attachment to: ', file_path)
+            with open(file_path, 'wb') as f:
+                f.write(file_data)
+
+def download_attachments_all(service, user_id, msg_id, target_dir):
+    """
+    Download all attachments from a specific email message.
+    """
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+
+    thread = service.users().threads().get(userId=user_id, id=msg_id).execute()
+    for message in thread['messages']:
+        for part in message['payload']['parts']:
+            if part['filename']:
+                att_id = part['body']['attachmentId']
+                att = service.users().messages().attachments().get(userId=user_id, messageId=message['id'], id=att_id).execute()
+                data = att['data']
+                file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+                file_path = os.path.join(target_dir, part['filename'])
+                print('Saving attachment to: ', file_path)
+                with open(file_path, 'wb') as f:
+                    f.write(file_data)
