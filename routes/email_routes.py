@@ -106,3 +106,24 @@ def register_routes(app, gmail_service, mongo):
         except Exception as e:
             logger.error(f"Error fetching emails: {str(e)}")
             return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/refresh", methods=["POST"])
+    def refresh_emails():
+        user_email = get_user_email(gmail_service)
+        if not user_email:
+            logger.error("Failed to get user email from Gmail API")
+            return jsonify({"error": "Could not authenticate user"}), 401
+
+        try:
+            # Call sync_emails to process new emails
+            new_emails_count = sync_emails(gmail_service, user_email, mongo)
+            needs_refresh = new_emails_count > 0
+            
+            return jsonify({
+                "message": "Refresh completed successfully",
+                "new_emails_count": new_emails_count,
+                "needs_refresh": needs_refresh
+            })
+        except Exception as e:
+            logger.error(f"Error refreshing emails: {str(e)}")
+            return jsonify({"error": str(e)}), 500
