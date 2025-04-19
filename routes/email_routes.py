@@ -1,7 +1,7 @@
 from flask import request, jsonify
 import logging
 from utils.email_utils import process_new_emails, store_email_in_db
-from utils.gmail_api import get_email_messages, get_user_email
+from utils.gmail_api import get_email_messages, get_user_email, send_email as gmail_send_email  
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +9,44 @@ def register_routes(app, gmail_service, mongo):
     @app.route("/api/health", methods=["GET"])
     def health_check():
         return jsonify({"status": "ok"})
+
+    @app.route("/api/send_email", methods=["POST"])
+    def send_email_route():  
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        required_fields = ['to', 'subject', 'body']
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            body_type = data.get('body_type', 'plain')
+            if body_type not in ['plain', 'html']:
+                return jsonify({"error": "body_type must be either 'plain' or 'html'"}), 400
+
+            # Get authenticated user's email
+            user_email = get_user_email(gmail_service)
+            if not user_email:
+                return jsonify({"error": "Could not authenticate user"}), 401
+
+            # Send the email using the imported function
+            response = gmail_send_email(
+                service=gmail_service,
+                to=data['to'],
+                subject=data['subject'],
+                body=data['body'],
+                body_type=body_type
+            )
+
+            return jsonify({
+                "message": "Email sent successfully",
+                "message_id": response['id']
+            })
+
+        except Exception as e:
+            logger.error(f"Error sending email: {str(e)}")
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/fetch_emails", methods=["GET"])
     def fetch_emails():
