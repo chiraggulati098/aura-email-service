@@ -127,3 +127,40 @@ def register_routes(app, gmail_service, mongo):
         except Exception as e:
             logger.error(f"Error refreshing emails: {str(e)}")
             return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/mark_as_read", methods=["POST"])
+    def mark_as_read():
+        data = request.json
+        if not data or 'msg_id' not in data:
+            return jsonify({"error": "Message ID is required"}), 400
+
+        user_email = get_user_email(gmail_service)
+        if not user_email:
+            logger.error("Failed to get user email from Gmail API")
+            return jsonify({"error": "Could not authenticate user"}), 401
+
+        try:
+            # Update the email document in MongoDB
+            result = mongo.db.emails.update_one(
+                {
+                    'user_email': user_email,
+                    'id': data['msg_id'],  # Using 'id' to match the database schema
+                    'read': False  # Only update if it's currently unread
+                },
+                {'$set': {'read': True}}
+            )
+
+            if result.modified_count > 0:
+                return jsonify({
+                    "message": "Email marked as read successfully",
+                    "updated": True
+                })
+            else:
+                return jsonify({
+                    "message": "Email was already marked as read or not found",
+                    "updated": False
+                })
+                
+        except Exception as e:
+            logger.error(f"Error marking email as read: {str(e)}")
+            return jsonify({"error": str(e)}), 500
