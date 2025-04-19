@@ -50,7 +50,7 @@ def register_routes(app, gmail_service, mongo):
 
     @app.route("/api/fetch_emails", methods=["GET"])
     def fetch_emails():
-        BATCH_SIZE = 5
+        BATCH_SIZE = 20
         user_email = get_user_email(gmail_service)
         if not user_email:
             logger.error("Failed to get user email from Gmail API")
