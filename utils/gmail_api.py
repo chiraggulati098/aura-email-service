@@ -183,3 +183,14 @@ def download_attachments_all(service, user_id, msg_id, target_dir):
 
 def trash_email(service, user_id, msg_id):
     service.users().messages().trash(userId=user_id, id=msg_id).execute()
+
+def get_user_email(service):
+    """
+    Get the email address of the authenticated user.
+    """
+    try:
+        profile = service.users().getProfile(userId='me').execute()
+        return profile['emailAddress']
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
