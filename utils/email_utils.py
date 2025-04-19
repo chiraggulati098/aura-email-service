@@ -1,8 +1,65 @@
+from utils.gmail_api import get_email_messages, get_email_message_details
 import logging
 from email.utils import parsedate_to_datetime
-from utils.gmail_api import get_email_message_details
 
 logger = logging.getLogger(__name__)
+
+def sync_emails(gmail_service, user_email, mongo):
+    """
+    Sync emails from Gmail to MongoDB using exponential batch sizes.
+    Returns when it finds emails that are already in the database or no more emails exist.
+    Collects all new message IDs before processing them at once.
+    """
+    logger.info("Starting email sync")
+    batch_size = 2
+    new_message_ids = set()
+    
+    while True:
+        logger.info(f"Fetching batch of {batch_size} emails")
+        messages = get_email_messages(gmail_service, max_results=batch_size)
+        
+        # No more emails to fetch
+        if len(messages) < batch_size:
+            logger.info(f"Found {len(messages)} emails, less than batch size {batch_size}. Adding to final batch.")
+            if messages:
+                message_ids = [msg['id'] for msg in messages]
+                new_message_ids.update(message_ids)
+            break
+            
+        message_ids = [msg['id'] for msg in messages]
+        
+        # Check which emails already exist in database
+        existing_emails = list(mongo.db.emails.find(
+            {'user_email': user_email, 'id': {'$in': message_ids}},
+            {'id': 1}
+        ))
+        existing_ids = {email['id'] for email in existing_emails}
+        
+        # If we found any existing emails, we can stop after adding new ones to our set
+        if existing_ids:
+            logger.info(f"Found {len(existing_ids)} existing emails, adding remaining new ones to final batch")
+            new_ids = set(message_ids) - existing_ids
+            new_message_ids.update(new_ids)
+            break
+        
+        # No existing emails found, add all IDs from this batch
+        logger.info(f"Adding {len(message_ids)} new email IDs to batch")
+        new_message_ids.update(message_ids)
+        
+        # Double the batch size for next iteration
+        batch_size *= 2
+    
+    # Process all new emails at once
+    if new_message_ids:
+        logger.info(f"Processing all {len(new_message_ids)} new emails")
+        processed_emails = process_new_emails(list(new_message_ids), user_email, gmail_service, mongo)
+        processed_count = len(processed_emails)
+    else:
+        logger.info("No new emails to process")
+        processed_count = 0
+    
+    logger.info(f"Sync completed. Processed {processed_count} new emails")
+    return processed_count
 
 def process_new_emails(msg_ids, user_email, gmail_service, mongo):
     """Helper function to process new email IDs"""
