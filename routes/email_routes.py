@@ -1,8 +1,7 @@
 from flask import request, jsonify
 import logging
 from utils.email_utils import process_new_emails, store_email_in_db, sync_emails
-from utils.gmail_api import get_email_messages, get_user_email, send_email as gmail_send_email
-from flask import request, jsonify
+from utils.gmail_api import get_email_messages, get_user_email, send_email as gmail_send_email, trash_email
 
 logger = logging.getLogger(__name__)
 
@@ -163,4 +162,40 @@ def register_routes(app, gmail_service, mongo):
                 
         except Exception as e:
             logger.error(f"Error marking email as read: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/delete_email", methods=["POST"])
+    def delete_email():
+        data = request.json
+        if not data or 'msg_id' not in data:
+            return jsonify({"error": "Message ID is required"}), 400
+
+        user_email = get_user_email(gmail_service)
+        if not user_email:
+            logger.error("Failed to get user email from Gmail API")
+            return jsonify({"error": "Could not authenticate user"}), 401
+
+        try:
+            # Call trash_email to delete the email from Gmail
+            trash_email(gmail_service, data['msg_id'])
+
+            # Remove the email from MongoDB
+            result = mongo.db.emails.delete_one({
+                'user_email': user_email,
+                'id': data['msg_id']
+            })
+
+            if result.deleted_count > 0:
+                return jsonify({
+                    "message": "Email deleted successfully",
+                    "deleted": True
+                })
+            else:
+                return jsonify({
+                    "message": "Email not found in database",
+                    "deleted": False
+                })
+
+        except Exception as e:
+            logger.error(f"Error deleting email: {str(e)}")
             return jsonify({"error": str(e)}), 500
