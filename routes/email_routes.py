@@ -69,6 +69,7 @@ def register_routes(app, gmail_service, mongo):
     def fetch_emails():
         EMAILS_PER_PAGE = 20
         page = request.args.get('page', 1, type=int)
+        filter_type = request.args.get('filter', 'all')
         
         user_email = get_user_email(gmail_service)
         if not user_email:
@@ -79,12 +80,23 @@ def register_routes(app, gmail_service, mongo):
             # Calculate skip and limit for pagination
             skip = (page - 1) * EMAILS_PER_PAGE
             
+            # Base query for user's emails
+            base_query = {'user_email': user_email}
+            
+            # Add classification filter
+            if filter_type == 'valid_only':
+                base_query.update({'spam': False, 'phishing': False})
+            elif filter_type == 'spam_and_phishing':
+                base_query.update({'$or': [{'spam': True}, {'phishing': True}]})
+            elif filter_type != 'all':
+                return jsonify({"error": "Invalid filter type. Must be 'valid_only', 'spam_and_phishing', or 'all'"}), 400
+            
             # Get total count first
-            total_emails = mongo.db.emails.count_documents({'user_email': user_email})
+            total_emails = mongo.db.emails.count_documents(base_query)
             
             # Get paginated emails
             emails = list(mongo.db.emails.find(
-                {'user_email': user_email},
+                base_query,
                 {'_id': 0}
             ).sort([('date', -1), ('time', -1)])
             .skip(skip)
@@ -100,7 +112,8 @@ def register_routes(app, gmail_service, mongo):
                 'page': page,
                 'emails_per_page': EMAILS_PER_PAGE,
                 'start_index': start_index,
-                'end_index': end_index
+                'end_index': end_index,
+                'filter': filter_type
             })
         except Exception as e:
             logger.error(f"Error fetching emails: {str(e)}")
