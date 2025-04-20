@@ -227,3 +227,17 @@ def register_routes(app, gmail_service, mongo):
         except Exception as e:
             logger.error(f"Error fetching sent emails: {str(e)}")
             return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/get_user_email", methods=["GET"])
+    def get_authenticated_user_email():
+        try:
+            user_email = get_user_email(gmail_service)
+            if user_email:
+                return jsonify({
+                    "email": user_email
+                })
+            else:
+                return jsonify({"error": "Could not retrieve user email"}), 500
+        except Exception as e:
+            logger.error(f"Error getting user email: {str(e)}")
+            return jsonify({"error": str(e)}), 500
