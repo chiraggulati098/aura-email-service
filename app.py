@@ -6,6 +6,7 @@ import logging
 from utils.gmail_api import init_gmail_service, get_user_email
 from utils.email_utils import sync_emails
 from routes.email_routes import register_routes
+from routes.ai_routes import register_ai_routes
 import atexit
 
 # Setup logging
@@ -44,6 +45,7 @@ with app.app_context():
 
 # Register routes
 register_routes(app, gmail_service, mongo)
+register_ai_routes(app, gmail_service, mongo)
 
 def cleanup_resources():
     # Clean up database connections
