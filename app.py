@@ -6,6 +6,7 @@ import logging
 from utils.gmail_api import init_gmail_service, get_user_email
 from utils.email_utils import sync_emails
 from routes.email_routes import register_routes
+import atexit
 
 # Setup logging
 logging.basicConfig(level=logging.INFO,
@@ -43,6 +44,21 @@ with app.app_context():
 
 # Register routes
 register_routes(app, gmail_service, mongo)
+
+def cleanup_resources():
+    # Clean up database connections
+    mongo.cx.close()
+    
+    # Clean up semaphores
+    try:
+        import multiprocessing as mp
+        if hasattr(mp, '_resource_tracker'):
+            # Force the resource tracker to clean up any remaining semaphores
+            mp._resource_tracker._resource_tracker._join_process()
+    except Exception as e:
+        logger.error(f"Error cleaning up semaphores: {e}")
+
+atexit.register(cleanup_resources)
 
 if __name__ == "__main__":
     app.run(debug=True)

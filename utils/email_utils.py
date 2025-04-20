@@ -111,6 +111,8 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo, is_sent=False)
             is_unread = 'UNREAD' in label
 
             body = detail.get('body', '')
+            read = not is_unread
+            read = True if is_sent else read
 
             if not is_sent:
                 is_phishing = predict_phishing(body)
@@ -131,7 +133,7 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo, is_sent=False)
                 'time': formatted_time,
                 'star': detail.get('star', False),
                 'label': label,
-                'read': not is_unread,
+                'read': read,
                 'spam': is_spam,
                 'phishing': is_phishing
             }
