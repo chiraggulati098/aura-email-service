@@ -49,12 +49,12 @@ def sync_email_batch(gmail_service, user_email, mongo, is_sent):
             
         message_ids = [msg['id'] for msg in messages]
         
-        # Check which emails already exist in database with matching is_sent flag
-        existing_emails = list(mongo.db.emails.find(
+        # Check which emails already exist in the appropriate database
+        collection = mongo.db.sent_emails if is_sent else mongo.db.emails
+        existing_emails = list(collection.find(
             {
                 'user_email': user_email, 
-                'id': {'$in': message_ids},
-                'is_sent': is_sent  # Add is_sent to the query
+                'id': {'$in': message_ids}
             },
             {'id': 1}
         ))
@@ -133,12 +133,11 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo, is_sent=False)
                 'label': label,
                 'read': not is_unread,
                 'spam': is_spam,
-                'phishing': is_phishing,
-                'is_sent': is_sent  
+                'phishing': is_phishing
             }
             
             # Store new email in database
-            store_email_in_db(email_info, user_email, mongo)
+            store_email_in_db(email_info, user_email, mongo, is_sent)
             new_emails.append(email_info)
         except Exception as e:
             logger.error(f"Error processing message ID {msg_id}: {str(e)}")
@@ -146,17 +145,18 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo, is_sent=False)
     
     return new_emails
 
-def store_email_in_db(email_info, user_email, mongo):
-    """Store email info in MongoDB with user reference"""
+def store_email_in_db(email_info, user_email, mongo, is_sent=False):
+    """Store email info in MongoDB with user reference. Uses different collections for sent and received emails."""
     try:
         email_info['user_email'] = user_email
-        mongo.db.emails.update_one(
+        collection = mongo.db.sent_emails if is_sent else mongo.db.emails
+        collection.update_one(
             {'id': email_info['id'], 'user_email': user_email},
             {'$set': email_info},
             upsert=True
         )
-        logger.debug(f"Stored email {email_info['id']} in database")
+        logger.debug(f"Stored {'sent' if is_sent else 'received'} email {email_info['id']} in database")
         return True
     except Exception as e:
-        logger.error(f"Error storing email {email_info['id']}: {str(e)}")
+        logger.error(f"Error storing {'sent' if is_sent else 'received'} email {email_info['id']}: {str(e)}")
         return False
