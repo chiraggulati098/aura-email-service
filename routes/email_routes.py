@@ -16,7 +16,7 @@ def register_routes(app, gmail_service, mongo):
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        required_fields = ['to', 'subject', 'body']
+        required_fields = ['to', 'subject', 'body', 'user_email']
         if not all(field in data for field in required_fields):
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -24,11 +24,6 @@ def register_routes(app, gmail_service, mongo):
             body_type = data.get('body_type', 'plain')
             if body_type not in ['plain', 'html']:
                 return jsonify({"error": "body_type must be either 'plain' or 'html'"}), 400
-
-            # Get authenticated user's email
-            user_email = get_user_email(gmail_service)
-            if not user_email:
-                return jsonify({"error": "Could not authenticate user"}), 401
 
             # Send the email using the imported function
             response = gmail_send_email(
@@ -50,13 +45,12 @@ def register_routes(app, gmail_service, mongo):
 
     @app.route("/api/sync_emails", methods=["POST"])
     def sync_emails_route():
-        user_email = get_user_email(gmail_service)
-        if not user_email:
-            logger.error("Failed to get user email from Gmail API")
-            return jsonify({"error": "Could not authenticate user"}), 401
+        data = request.json
+        if not data or 'user_email' not in data:
+            return jsonify({"error": "user_email is required"}), 400
 
         try:
-            processed_count = sync_emails(gmail_service, user_email, mongo)
+            processed_count = sync_emails(gmail_service, data['user_email'], mongo)
             return jsonify({
                 "message": "Email sync completed successfully",
                 "processed_count": processed_count
@@ -70,11 +64,10 @@ def register_routes(app, gmail_service, mongo):
         EMAILS_PER_PAGE = 20
         page = request.args.get('page', 1, type=int)
         filter_type = request.args.get('filter', 'all')
+        user_email = request.args.get('user_email')
         
-        user_email = get_user_email(gmail_service)
         if not user_email:
-            logger.error("Failed to get user email from Gmail API")
-            return jsonify({"error": "Could not authenticate user"}), 401
+            return jsonify({"error": "user_email is required"}), 400
 
         try:
             # Calculate skip and limit for pagination
@@ -121,14 +114,13 @@ def register_routes(app, gmail_service, mongo):
     
     @app.route("/api/refresh", methods=["POST"])
     def refresh_emails():
-        user_email = get_user_email(gmail_service)
-        if not user_email:
-            logger.error("Failed to get user email from Gmail API")
-            return jsonify({"error": "Could not authenticate user"}), 401
+        data = request.json
+        if not data or 'user_email' not in data:
+            return jsonify({"error": "user_email is required"}), 400
 
         try:
             # Call sync_emails to process new emails
-            new_emails_count = sync_emails(gmail_service, user_email, mongo)
+            new_emails_count = sync_emails(gmail_service, data['user_email'], mongo)
             needs_refresh = new_emails_count > 0
             
             return jsonify({
@@ -144,17 +136,12 @@ def register_routes(app, gmail_service, mongo):
     def mark_as_read():
         try:
             data = request.json
-            if not data or 'msg_id' not in data:
-                return jsonify({"error": "Message ID is required"}), 400
-
-            user_email = get_user_email(gmail_service)
-            if not user_email:
-                logger.error("Failed to get user email from Gmail API")
-                return jsonify({"error": "Could not authenticate user"}), 401
+            if not data or 'msg_id' not in data or 'user_email' not in data:
+                return jsonify({"error": "Message ID and user_email are required"}), 400
 
             result = mongo.db.emails.update_one(
                 {
-                    'user_email': user_email,
+                    'user_email': data['user_email'],
                     'id': data['msg_id'],
                     'read': False
                 },
@@ -173,13 +160,8 @@ def register_routes(app, gmail_service, mongo):
     @app.route("/api/delete_email", methods=["POST"])
     def delete_email():
         data = request.json
-        if not data or 'msg_id' not in data:
-            return jsonify({"error": "Message ID is required"}), 400
-
-        user_email = get_user_email(gmail_service)
-        if not user_email:
-            logger.error("Failed to get user email from Gmail API")
-            return jsonify({"error": "Could not authenticate user"}), 401
+        if not data or 'msg_id' not in data or 'user_email' not in data:
+            return jsonify({"error": "Message ID and user_email are required"}), 400
 
         try:
             # Call trash_email to delete the email from Gmail
@@ -187,7 +169,7 @@ def register_routes(app, gmail_service, mongo):
 
             # Remove the email from MongoDB
             result = mongo.db.emails.delete_one({
-                'user_email': user_email,
+                'user_email': data['user_email'],
                 'id': data['msg_id']
             })
 
@@ -210,11 +192,10 @@ def register_routes(app, gmail_service, mongo):
     def fetch_sent_emails():
         EMAILS_PER_PAGE = 20
         page = request.args.get('page', 1, type=int)
+        user_email = request.args.get('user_email')
         
-        user_email = get_user_email(gmail_service)
         if not user_email:
-            logger.error("Failed to get user email from Gmail API")
-            return jsonify({"error": "Could not authenticate user"}), 401
+            return jsonify({"error": "user_email is required"}), 400
 
         try:
             # Calculate skip and limit for pagination
