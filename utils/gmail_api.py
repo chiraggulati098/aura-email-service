@@ -31,7 +31,7 @@ def _extract_body(payload):
         body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8')
     return body
 
-def get_email_messages(service, user_id='me', label_ids=None, folder_name='INBOX', max_results=None):
+def get_email_messages(service, user_id='me', label_ids=None, folder_name='INBOX', query=None, max_results=None):
     """
     Get a list of email messages from the user's mailbox.
         """
@@ -54,6 +54,7 @@ def get_email_messages(service, user_id='me', label_ids=None, folder_name='INBOX
         result = service.users().messages().list(
             userId=user_id,
             labelIds=label_ids,
+            q=query,
             maxResults=min(500, max_results - len(messages)) if max_results else 500,
             pageToken=next_page_token
         ).execute()
@@ -79,7 +80,7 @@ def get_email_message_details(service, msg_id):
         subject = message.get('subject', 'No subject')
 
     sender = next((header['value'] for header in headers if header['name'] == 'From'), 'No sender')
-    recipients = next((header['value'] for header in headers if header['name'] == 'To'), 'No recipients')
+    recipients = next((header['value'] for header in headers if header['name'].lower() == 'to'), 'No recipients')
     snippet = message.get('snippet', 'No snippet')
     has_attachments = any(part.get('filename') for part in payload.get('parts', []) if part.get('filename'))
     date = next((header['value'] for header in headers if header['name'] == 'Date'), 'No date')

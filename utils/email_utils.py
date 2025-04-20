@@ -1,4 +1,6 @@
 from utils.gmail_api import get_email_messages, get_email_message_details
+from utils.phishing_utils import predict_phishing
+from utils.spam_utils import predict_spam
 import logging
 from email.utils import parsedate_to_datetime
 
@@ -85,12 +87,17 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo):
 
             is_unread = 'UNREAD' in label
 
+            body = detail.get('body', '')
+
+            is_phishing = predict_phishing(body)
+            is_spam = True if predict_spam(body) == 1 else False
+
             email_info = {
                 'id': msg_id,
                 'subject': detail.get('subject', ''),
                 'sender': detail.get('sender', ''),
                 'recipients': detail.get('recipients', []),
-                'body': detail.get('body', ''),
+                'body': body,
                 'snippet': detail.get('snippet', ''),
                 'has_attachments': detail.get('has_attachments', False),
                 'date': formatted_date,
@@ -98,8 +105,8 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo):
                 'star': detail.get('star', False),
                 'label': label,
                 'read': not is_unread,
-                'spam': False,
-                'phishing': False
+                'spam': is_spam,
+                'phishing': is_phishing
             }
             
             # Store new email in database
