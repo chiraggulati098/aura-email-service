@@ -8,17 +8,36 @@ logger = logging.getLogger(__name__)
 
 def sync_emails(gmail_service, user_email, mongo):
     """
-    Sync emails from Gmail to MongoDB using exponential batch sizes.
+    Sync both received and sent emails from Gmail to MongoDB using exponential batch sizes.
     Returns when it finds emails that are already in the database or no more emails exist.
     Collects all new message IDs before processing them at once.
     """
     logger.info("Starting email sync")
+    total_processed = 0
+    
+    # Sync received emails
+    logger.info("Syncing received emails")
+    total_processed += sync_email_batch(gmail_service, user_email, mongo, False)
+    
+    # Sync sent emails
+    logger.info("Syncing sent emails")
+    total_processed += sync_email_batch(gmail_service, user_email, mongo, True)
+    
+    logger.info(f"Total sync completed. Processed {total_processed} new emails")
+    return total_processed
+
+def sync_email_batch(gmail_service, user_email, mongo, is_sent):
+    """Helper function to sync a batch of emails (either sent or received)"""
     batch_size = 2
     new_message_ids = set()
+    query = "from:me" if is_sent else None
     
     while True:
-        logger.info(f"Fetching batch of {batch_size} emails")
-        messages = get_email_messages(gmail_service, max_results=batch_size)
+        logger.info(f"Fetching batch of {batch_size} {'sent' if is_sent else 'received'} emails")
+        if is_sent:
+            messages = get_email_messages(gmail_service, folder_name=None, query=query, max_results=batch_size)
+        else:
+            messages = get_email_messages(gmail_service, query=query, max_results=batch_size)
         
         # No more emails to fetch
         if len(messages) < batch_size:
@@ -30,9 +49,13 @@ def sync_emails(gmail_service, user_email, mongo):
             
         message_ids = [msg['id'] for msg in messages]
         
-        # Check which emails already exist in database
+        # Check which emails already exist in database with matching is_sent flag
         existing_emails = list(mongo.db.emails.find(
-            {'user_email': user_email, 'id': {'$in': message_ids}},
+            {
+                'user_email': user_email, 
+                'id': {'$in': message_ids},
+                'is_sent': is_sent  # Add is_sent to the query
+            },
             {'id': 1}
         ))
         existing_ids = {email['id'] for email in existing_emails}
@@ -53,19 +76,19 @@ def sync_emails(gmail_service, user_email, mongo):
     
     # Process all new emails at once
     if new_message_ids:
-        logger.info(f"Processing all {len(new_message_ids)} new emails")
-        processed_emails = process_new_emails(list(new_message_ids), user_email, gmail_service, mongo)
+        logger.info(f"Processing all {len(new_message_ids)} new {'sent' if is_sent else 'received'} emails")
+        processed_emails = process_new_emails(list(new_message_ids), user_email, gmail_service, mongo, is_sent)
         processed_count = len(processed_emails)
     else:
-        logger.info("No new emails to process")
+        logger.info(f"No new {'sent' if is_sent else 'received'} emails to process")
         processed_count = 0
     
     logger.info(f"Sync completed. Processed {processed_count} new emails")
     return processed_count
 
-def process_new_emails(msg_ids, user_email, gmail_service, mongo):
+def process_new_emails(msg_ids, user_email, gmail_service, mongo, is_sent=False):
     """Helper function to process new email IDs"""
-    logger.info(f"Processing {len(msg_ids)} new emails")
+    logger.info(f"Processing {len(msg_ids)} new {'sent' if is_sent else 'received'} emails")
     new_emails = []
     for msg_id in msg_ids:
         try:
@@ -89,8 +112,12 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo):
 
             body = detail.get('body', '')
 
-            is_phishing = predict_phishing(body)
-            is_spam = True if predict_spam(body) == 1 else False
+            if not is_sent:
+                is_phishing = predict_phishing(body)
+                is_spam = True if predict_spam(body) == 1 else False
+            else:
+                is_phishing = False
+                is_spam = False
 
             email_info = {
                 'id': msg_id,
@@ -106,7 +133,8 @@ def process_new_emails(msg_ids, user_email, gmail_service, mongo):
                 'label': label,
                 'read': not is_unread,
                 'spam': is_spam,
-                'phishing': is_phishing
+                'phishing': is_phishing,
+                'is_sent': is_sent  
             }
             
             # Store new email in database
