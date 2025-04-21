@@ -75,7 +75,7 @@ Body: {email.get('body', 'No body')}
 Date: {email.get('date', 'No date')}
 Time: {email.get('time', 'No time')}
 
-Task: Draft the body of a reply email from the receiver to the sender, responding to the main message, acknowledging any requests, and providing relevant answers or actions. Ensure the reply is polite, professional, and concise, maintaining an appropriate tone based on the original email's context. Also do add a salutation and closing line to the reply. Something like warm regards, best regards, etc. depending on the context of the email.
+Task: Draft the body of a reply email from the receiver to the sender, responding to the main message, acknowledging any requests, and providing relevant answers or actions. Ensure the reply is polite, professional, and concise, maintaining an appropriate tone based on the original email's context. Remember not to add a subject, subject will be prefilled, just give the output as the mail body section for the reply. Also do add a salutation and closing line to the reply, something like warm regards, best regards, etc. depending on the context of the email.
 
 Reply:"""
 
