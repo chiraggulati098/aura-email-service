@@ -38,6 +38,7 @@ def sync_email_batch(gmail_service, user_email, mongo, is_sent):
             messages = get_email_messages(gmail_service, folder_name=None, query=query, max_results=batch_size)
         else:
             messages = get_email_messages(gmail_service, query=query, max_results=batch_size)
+            messages.extend(get_email_messages(gmail_service, folder_name='SPAM', query=query, max_results=batch_size))
         
         # No more emails to fetch
         if len(messages) < batch_size:
