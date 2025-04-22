@@ -90,3 +90,32 @@ Reply:"""
         except Exception as e:
             logger.error(f"Error generating email reply: {str(e)}")
             return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/proofread", methods=["POST"])
+    def proofread_email():
+        try:
+            data = request.json
+            if not data or 'body' not in data:
+                return jsonify({"error": "Email body is required"}), 400
+
+            # Create the prompt
+            prompt = f"""You are an AI assistant tasked with proofreading the body of an email to ensure it is grammatically correct and clear while preserving its original tone. Below is the email body provided for review. Please check for grammar, spelling, punctuation, and clarity issues, and return only the revised email body with necessary corrections to grammar and meaning, or the original body if no changes are needed.
+
+Email Body:
+{data['body']}
+
+Task: Proofread the provided email body and return only the corrected version, fixing any grammatical, spelling, or punctuation errors and clarifying meaning where necessary, while maintaining the original tone. If the body is already error-free and clear, return the original body unchanged.
+
+Proofreaded body:"""
+
+            # Get proofread version from Gemini
+            proofread_body = generate_response(prompt)
+            
+            return jsonify({
+                "message": "Email proofread successfully",
+                "proofread_body": proofread_body
+            })
+
+        except Exception as e:
+            logger.error(f"Error proofreading email: {str(e)}")
+            return jsonify({"error": str(e)}), 500
