@@ -7,6 +7,7 @@ from utils.gmail_api import init_gmail_service, get_user_email
 from utils.email_utils import sync_emails
 from routes.email_routes import register_routes
 from routes.ai_routes import register_ai_routes
+from routes.auth_routes import auth_bp
 import atexit
 
 # Setup logging
@@ -18,9 +19,12 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://127.0.0.1:5000", "http://localhost:8080"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
+        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Credentials", "Access-Control-Allow-Origin"],
+        "expose_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "send_wildcard": False,
+        "max_age": 86400
     }
 })
 
@@ -31,21 +35,14 @@ mongo = PyMongo(app)
 with app.app_context():
     mongo.db.emails.create_index([("user_email", 1), ("id", 1)])
 
-client_file = os.path.join(os.path.dirname(__file__), 'client_secret.json')
-gmail_service = init_gmail_service(client_file, api_name='gmail', api_version='v1', scopes=['https://mail.google.com/'])
-
-# Sync emails after initializing Gmail service
-with app.app_context():
-    user_email = get_user_email(gmail_service)
-    if user_email:
-        logger.info(f"Starting initial email sync for {user_email}")
-        sync_emails(gmail_service, user_email, mongo)
-    else:
-        logger.error("Failed to get user email, skipping initial sync")
-
 # Register routes
-register_routes(app, gmail_service, mongo)
-register_ai_routes(app, gmail_service, mongo)
+register_routes(app, mongo)
+register_ai_routes(app, mongo)
+
+# Initialize auth routes with mongo instance
+from routes.auth_routes import init_auth
+init_auth(mongo)
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
 def cleanup_resources():
     # Clean up database connections

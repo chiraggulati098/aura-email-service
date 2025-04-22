@@ -1,21 +1,24 @@
 from flask import request, jsonify
 import logging
 from utils.gemini_api import generate_response
+from routes.auth_routes import login_required
 
 logger = logging.getLogger(__name__)
 
-def register_ai_routes(app, gmail_service, mongo):
+def register_ai_routes(app, mongo):
     @app.route("/api/summarize_email", methods=["POST"])
+    @login_required
     def summarize_email():
         try:
             data = request.json
             if not data or 'msg_id' not in data:
                 return jsonify({"error": "Message ID is required"}), 400
 
+            user_email = request.user_email
             # Get email details from MongoDB
-            email = mongo.db.emails.find_one({'id': data['msg_id']})
+            email = mongo.db.emails.find_one({'id': data['msg_id'], 'user_email': user_email})
             if not email:
-                email = mongo.db.sent_emails.find_one({'id': data['msg_id']})
+                email = mongo.db.sent_emails.find_one({'id': data['msg_id'], 'user_email': user_email})
             
             if not email:
                 return jsonify({"error": "Email not found"}), 404
@@ -49,16 +52,18 @@ Summarized mail:"""
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/generate_reply", methods=["POST"])
+    @login_required
     def generate_email_reply():
         try:
             data = request.json
             if not data or 'msg_id' not in data:
                 return jsonify({"error": "Message ID is required"}), 400
 
+            user_email = request.user_email
             # Get email details from MongoDB
-            email = mongo.db.emails.find_one({'id': data['msg_id']})
+            email = mongo.db.emails.find_one({'id': data['msg_id'], 'user_email': user_email})
             if not email:
-                email = mongo.db.sent_emails.find_one({'id': data['msg_id']})
+                email = mongo.db.sent_emails.find_one({'id': data['msg_id'], 'user_email': user_email})
             
             if not email:
                 return jsonify({"error": "Email not found"}), 404
@@ -90,8 +95,9 @@ Reply:"""
         except Exception as e:
             logger.error(f"Error generating email reply: {str(e)}")
             return jsonify({"error": str(e)}), 500
-    
+
     @app.route("/api/proofread", methods=["POST"])
+    @login_required
     def proofread_email():
         try:
             data = request.json
